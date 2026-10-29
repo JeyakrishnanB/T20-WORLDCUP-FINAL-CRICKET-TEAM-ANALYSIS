@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>T20 World Cup: Player Analysis</title>
+<style>
+:root{--bg:#1c1c2e;--panel:#222236;--line:#14595a;--teal:#0f5a5a;--yel:#d0d31c;--org:#e56b35;--tx:#f2f2f2;--mut:#9aa;color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+*{box-sizing:border-box}html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--tx);font:14px/1.4 "Segoe UI",system-ui,sans-serif}
+.top{background:var(--teal);display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;border-bottom:1px solid #fff4}
+.tabs{display:flex}.tabs button{background:none;border:0;color:#fff;font:italic 700 16px "Segoe UI",sans-serif;padding:20px 38px;cursor:pointer}
+.tabs button.on{background:#1b1b2c;color:var(--yel)}
+.roles{display:flex;gap:6px;padding:0 14px 8px;flex-wrap:wrap}
+.roles button{background:#1b1b2c;color:#fff;border:1px solid var(--yel);transform:skewX(-12deg);padding:6px 16px;font-weight:600;cursor:pointer;border-radius:4px}
+.roles button.on{background:var(--teal)}
+.wrap{padding:14px;max-width:1280px;margin:auto}
+.hint{background:var(--yel);color:#222;border-radius:0 20px 0 20px;padding:12px 18px;font-size:12px;font-weight:600;text-align:center;flex:1;min-width:240px}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:12px}
+.hd{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:8px}
+.hd h2{margin:0;font-size:17px}
+.chip{background:#f0e46a;color:#222;border:0;border-radius:3px;padding:4px 12px;font-size:12px;cursor:pointer;opacity:.5}
+.chip.on{opacity:1}
+.scroll{overflow-x:auto}
+table{width:100%;border-collapse:collapse;min-width:780px}
+th{font-size:12px;text-align:center;padding:6px;cursor:pointer;user-select:none}
+td{text-align:center;padding:9px 6px;border-top:1px solid #ffffff0d}
+.l{text-align:left}
+tr.row{cursor:pointer}tr.row:hover{background:#ffffff0a}tr.sel{background:#d0d31c26}
+.bar{background:var(--org);height:18px;min-width:26px;color:#fff;font-size:11px;line-height:18px;text-align:center}
+.grid{display:grid;grid-template-columns:1.4fr 1fr;gap:12px}
+@media(max-width:850px){.grid{grid-template-columns:1fr}}
+.tr{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+@media(max-width:520px){.tr{grid-template-columns:1fr}}
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;margin:8px 0}
+.kpi{background:#1b1b2c;border-radius:8px;padding:8px;text-align:center}
+.kpi b{display:block;font-size:19px;color:var(--yel)}.kpi span{font-size:11px;color:var(--mut)}
+.note{color:var(--mut);padding:14px;text-align:center}
+.load{display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.btn{background:var(--yel);color:#222;border:0;border-radius:6px;padding:7px 14px;font-weight:700;cursor:pointer}
+svg text{fill:#ddd;font-size:10px}
+input[type=file]{color:var(--mut)}
+</style></head><body>
+<div class="top"><div class="tabs"><button class="on" id="t1">Player Analysis</button><button id="t2">Final 11</button></div><div class="roles" id="roles"></div></div>
+<div class="wrap" id="pa">
+<div class="panel load"><b>Load your data:</b><input type="file" id="fi" accept=".csv" multiple><span class="note" style="padding:0" id="st">Showing sample (Power Hitters from the reference screenshot). Select fact_batting_summary.csv, fact_bowling_summary.csv, dim_players.csv and dim_match_summary.csv together.</span></div>
+<div class="panel"><div class="hd"><h2 id="rt"></h2><button class="chip on" data-s="qual">Qualifier</button><button class="chip on" data-s="s12">Super 12</button><div class="hint">Select player(s) by clicking the player’s name to see their individual or combined strength.</div></div>
+<div class="scroll"><table id="tb"></table></div></div>
+<div class="grid"><div class="panel"><div class="tr" id="tr"></div></div>
+<div class="panel"><svg id="bub" viewBox="0 0 420 320" width="100%"></svg><div id="kp"></div></div></div></div>
+<div class="wrap" id="f11" hidden><div class="panel"><div class="hd"><h2>Final 11</h2><button class="btn" id="auto">Auto-pick Best 11</button><button class="btn" id="clr">Clear</button></div><div id="xi" class="note"></div></div></div>
+<script>
+const $=s=>document.querySelector(s),F=(v,d=2)=>(+v).toFixed(d),sum=(a,f)=>a.reduce((x,y)=>x+f(y),0);
+const ROLES=["Power Hitters","Anchors","Finishers","All Rounders","Specialist Fast Bowlers"];
+const TITLE={"Power Hitters":"Power Hitters / Openers"};
+// Thresholds: edit to tune role classification
+const T={phSR:140,anAvg:35,anSR:130,fiSR:140,minInn:3,arRuns:80,arWk:4,bowlOv:8};
+const SAMPLE=[["Alex Hales","England","Right hand Bat",6,212,144,147.22,42.4,2,64.15],["Jos Buttler","England","Right hand Bat",6,225,156,144.23,45,1,61.33],["Kusal Mendis","Sri Lanka","Right hand Bat",8,223,156,142.95,31.86,2,57.4],["Quinton de Kock","South Africa","Left hand Bat",5,124,77,161.04,31,2,75.81],["Rilee Rossouw","South Africa","Left hand Bat",4,141,83,169.88,35.25,3,63.83]].map(a=>({n:a[0],t:a[1],s:a[2],inn:a[3],runs:a[4],b:a[5],sr:a[6],avg:a[7],pos:a[8],bp:a[9]}));
+let S={bat:[],bowl:[],pl:{},mt:{},sample:true},role=ROLES[0],sort={k:"n",d:1},sel=new Set(),stg={qual:1,s12:1},R={};
+const BC=[["n","Name","l"],["t","Team","l"],["s","batting Style","l"],["inn","Innings Batted"],["runs","Runs","bar"],["b","Balls faced"],["sr","Strike rate"],["avg","Batting Average"],["pos","Batting Position",0,0],["bp","Boundary %",0,1]];
+const WC=[["n","Name","l"],["t","Team","l"],["s","bowling Style","l"],["inn","Matches"],["wk","Wickets","bar"],["ov","Overs"],["eco","Economy"],["bavg","Bowling Average"],["rc","Runs conceded"]];
+const isB=r=>r=="All Rounders"||r=="Specialist Fast Bowlers";
+function csv(t){const o=[];let r=[],c="",q=0;for(let i=0;i<t.length;i++){const ch=t[i];if(q){if(ch=='"'){if(t[i+1]=='"'){c+='"';i++}else q=0}else c+=ch}else if(ch=='"')q=1;else if(ch==","){r.push(c);c=""}else if(ch=="\n"||ch=="\r"){if(ch=="\r"&&t[i+1]=="\n")i++;r.push(c);c="";if(r.length>1||r[0])o.push(r);r=[]}else c+=ch}if(c||r.length){r.push(c);o.push(r)}
+ const h=o.shift().map(x=>x.toLowerCase().replace(/[^a-z0-9]/g,""));return o.map(a=>Object.fromEntries(h.map((k,i)=>[k,(a[i]||"").trim()])))}
+const g=(r,...k)=>{for(const x of k)if(r[x]!==undefined&&r[x]!=="")return r[x];return""};
+const ov=o=>{o=parseFloat(o)||0;const f=Math.trunc(o);return f+Math.round((o-f)*10)/6};
+function stageOk(id){const m=S.mt[id];if(!m||S.sample)return 1;const s=Object.entries(m).filter(([k])=>/stage|round|type|group/.test(k)).map(x=>x[1].toLowerCase()).join(" ");if(!s)return 1;const q=/qual|first|prelim/.test(s);return q?stg.qual:stg.s12}
+function build(){
+ if(S.sample){R={"Power Hitters":SAMPLE,"Anchors":[],"Finishers":[],"All Rounders":[],"Specialist Fast Bowlers":[]};return}
+ const A={};S.bat.filter(r=>stageOk(r.id)).forEach(r=>{const a=A[r.n]??={n:r.n,t:r.t,inn:0,runs:0,b:0,f:0,x:0,o:0,p:0};a.inn++;a.runs+=r.runs;a.b+=r.b;a.f+=r.f4*4+r.s6*6;a.o+=r.out;a.p+=r.pos});
+ const B={};S.bowl.filter(r=>stageOk(r.id)).forEach(r=>{const a=B[r.n]??={n:r.n,t:r.t,inn:0,ov:0,rc:0,wk:0};a.inn++;a.ov+=r.ov;a.rc+=r.rc;a.wk+=r.wk});
+ const bats=Object.values(A).map(a=>({...a,s:S.pl[a.n]?.battingstyle||"",sr:a.b?a.runs/a.b*100:0,avg:a.o?a.runs/a.o:a.runs,pos:Math.round(a.p/a.inn),bp:a.runs?a.f/a.runs*100:0}));
+ const bowls=Object.values(B).map(a=>({...a,s:S.pl[a.n]?.bowlingstyle||"",eco:a.ov?a.rc/a.ov:0,bavg:a.wk?a.rc/a.wk:0}));
+ const bw=Object.fromEntries(bowls.map(b=>[b.n,b])),bt=Object.fromEntries(bats.map(b=>[b.n,b]));
+ const role_=n=>(S.pl[n]?.playingrole||"").toLowerCase();
+ const ar=n=>role_(n).includes("allround")||(bt[n]?.runs>=T.arRuns&&bw[n]?.wk>=T.arWk);
+ R["Power Hitters"]=bats.filter(a=>a.inn>=T.minInn&&a.pos<=3&&a.sr>=T.phSR&&!ar(a.n));
+ R["Anchors"]=bats.filter(a=>a.inn>=T.minInn&&a.pos>=3&&a.pos<=5&&a.avg>=T.anAvg&&a.sr<T.anSR&&!ar(a.n));
+ R["Finishers"]=bats.filter(a=>a.inn>=T.minInn&&a.pos>=5&&a.sr>=T.fiSR&&!ar(a.n));
+ R["All Rounders"]=bowls.filter(b=>ar(b.n)&&b.ov>=3).map(b=>({...b,...(bt[b.n]||{}),...b}));
+ R["Specialist Fast Bowlers"]=bowls.filter(b=>!ar(b.n)&&b.ov>=T.bowlOv&&/fast|medium|pace/i.test(b.s||"fast")&&!bt[b.n]?.runs>60);
+}
+function head(){roles();table();side();bubble();trend()}
+function roles(){$("#roles").innerHTML=ROLES.map(r=>`<button class="${r==role?"on":""}" data-r="${r}">${r}</button>`).join("")}
+function table(){
+ const C=isB(role)?WC:BC,rows=[...(R[role]||[])].sort((a,b)=>(a[sort.k]>b[sort.k]?1:-1)*sort.d),k=C.find(c=>c[2]=="bar")[0],mx=Math.max(1,...rows.map(r=>r[k]));
+ $("#rt").textContent=TITLE[role]||role;
+ const cell=(r,c)=>c[2]=="bar"?`<td style="width:24%"><div class="bar" style="width:${r[k]/mx*100}%">${F(r[k],0)}</div></td>`:`<td class="${c[2]||""}">${typeof r[c[0]]=="number"&&!["inn","pos","b"].includes(c[0])?F(r[c[0]],c[0]=="rc"||c[0]=="ov"?0:2)+(c[0]=="bp"?"%":""):r[c[0]]}</td>`;
+ $("#tb").innerHTML="<tr>"+C.map(c=>`<th class="${c[2]=="l"?"l":""}" data-k="${c[0]}">${c[1]}${sort.k==c[0]?(sort.d>0?" ▲":" ▼"):""}</th>`).join("")+"</tr>"+
+ (rows.length?rows.map(r=>`<tr class="row ${sel.has(r.n)?"sel":""}" data-n="${r.n}">${C.map(c=>cell(r,c)).join("")}</tr>`).join(""):`<tr><td colspan="10" class="note">No players match this role yet. Load your CSVs (or adjust thresholds in T).</td></tr>`);
+}
+function side(){
+ const p=(R[role]||[]).filter(x=>sel.has(x.n));if(!p.length){$("#kp").innerHTML='<div class="note">No player selected</div>';return}
+ const k=isB(role)?[[p.length,"Players"],[sum(p,x=>x.wk),"Wickets"],[F(sum(p,x=>x.rc)/Math.max(1,sum(p,x=>x.ov))),"Combined Eco"],[F(sum(p,x=>x.bavg)/p.length),"Avg of avgs"]]:
+ [[p.length,"Players"],[sum(p,x=>x.runs),"Runs"],[F(sum(p,x=>x.runs)/sum(p,x=>x.b)*100),"Combined SR"],[F(sum(p,x=>x.avg)/p.length),"Avg of avgs"]];
+ $("#kp").innerHTML='<div class="kpis">'+k.map(x=>`<div class="kpi"><b>${x[0]}</b><span>${x[1]}</span></div>`).join("")+"</div>";
+}
+function bubble(){
+ const d=R[role]||[],X=isB(role)?"eco":"avg",Y=isB(role)?"wk":"sr";if(!d.length){$("#bub").innerHTML='<text x="20" y="150">No data</text>';return}
+ const xs=d.map(r=>r[X]),ys=d.map(r=>r[Y]),a=Math.min(...xs),b=Math.max(...xs),c=Math.min(...ys),e=Math.max(...ys),sx=v=>45+(v-a)/((b-a)||1)*330,sy=v=>285-(v-c)/((e-c)||1)*240,m=Math.max(...d.map(r=>r[isB(role)?"wk":"runs"]));
+ let s=`<text x="4" y="150" transform="rotate(-90 12 150)">${isB(role)?"Wickets":"Strike rate"}</text><text x="160" y="312">${isB(role)?"Economy":"Batting average"}</text>`;
+ for(let i=0;i<4;i++){const v=c+(e-c)*i/3;s+=`<line x1="45" x2="400" y1="${sy(v)}" y2="${sy(v)}" stroke="#fff3" stroke-dasharray="2 4"/><text x="14" y="${sy(v)+3}">${F(v,0)}</text>`;const u=a+(b-a)*i/3;s+=`<line y1="30" y2="285" x1="${sx(u)}" x2="${sx(u)}" stroke="#fff3" stroke-dasharray="2 4"/><text x="${sx(u)-8}" y="300">${F(u,0)}</text>`}
+ d.forEach(r=>{const on=sel.has(r.n);s+=`<circle cx="${sx(r[X])}" cy="${sy(r[Y])}" r="${8+r[isB(role)?"wk":"runs"]/m*10}" fill="${on?"#ff0":"#d9cf6a"}" opacity="${sel.size&&!on?.4:1}"/><text x="${sx(r[X])+14}" y="${sy(r[Y])+3}">${r.n}</text>`});
+ $("#bub").innerHTML=s}
+function trend(){
+ if(S.sample){$("#tr").innerHTML='<div class="note" style="grid-column:1/-1">Trend charts need match-level data. Load fact_batting_summary.csv above.</div>';return}
+ const names=new Set((R[role]||[]).map(r=>r.n)),use=sel.size?[...sel].filter(n=>names.has(n)):[...names],U=new Set(use),bo=isB(role),src=(bo?S.bowl:S.bat).filter(r=>U.has(r.n)&&stageOk(r.id)),ids=[...new Set(src.map(r=>r.id))];
+ const M=bo?[["Wickets",x=>sum(x,r=>r.wk)],["Economy",x=>sum(x,r=>r.rc)/Math.max(1,sum(x,r=>r.ov))],["Avg Overs",x=>sum(x,r=>r.ov)/x.length],["Avg Runs Conceded",x=>sum(x,r=>r.rc)/x.length]]:
+ [["Batting Avg",x=>{const o=sum(x,r=>r.out);return sum(x,r=>r.runs)/(o||1)}],["Avg Balls Faced",x=>sum(x,r=>r.b)/x.length],["Strike rate",x=>sum(x,r=>r.runs)/Math.max(1,sum(x,r=>r.b))*100],["Boundary %",x=>sum(x,r=>r.f4*4+r.s6*6)/Math.max(1,sum(x,r=>r.runs))*100]];
+ $("#tr").innerHTML=M.map(([l,f])=>{const v=ids.map(i=>f(src.filter(r=>r.id==i))),all=f(src),lo=Math.min(...v,all),hi=Math.max(...v,all),n=v.length,x=i=>40+i/Math.max(1,n-1)*340,y=t=>130-(t-lo)/((hi-lo)||1)*100,pts=v.map((t,i)=>x(i)+","+y(t)).join(" ");
+  return `<svg viewBox="0 0 400 150" width="100%"><text x="2" y="80" transform="rotate(-90 10 80)">${l}</text><polygon points="40,130 ${pts} ${x(n-1)},130" fill="#3b3b3b"/><polyline points="${pts}" fill="none" stroke="#d9cf6a"/>${v.map((t,i)=>`<circle cx="${x(i)}" cy="${y(t)}" r="2.2" fill="#fff"/>`).join("")}<line x1="40" x2="385" y1="${y(all)}" y2="${y(all)}" stroke="#ccc" stroke-width="2" stroke-dasharray="4 3"/><text x="330" y="${y(all)-5}" style="font-size:12px">${F(all)}</text></svg>`}).join("")}
+function xi(){const p=Object.values(R).flat().filter((x,i,a)=>sel.has(x.n)&&a.findIndex(y=>y.n==x.n)==i);$("#xi").innerHTML=p.length?`<div style="text-align:left">`+p.map((x,i)=>`<div>${i+1}. <b>${x.n}</b> (${x.t})</div>`).join("")+`</div><div style="margin-top:8px">${p.length}/11 selected</div>`:"No players selected. Pick players in each role tab or use Auto-pick."}
+function auto(){
+ if(S.sample)return alert("Load your CSV files first.");
+ const nm=(a,k)=>{const l=a.map(x=>x[k]),lo=Math.min(...l),h=Math.max(...l);return x=>(x[k]-lo)/((h-lo)||1)};
+ const pick=(r,n,sc)=>{const a=R[r]||[];return [...a].sort((x,y)=>sc(a)(y)-sc(a)(x)).slice(0,n)};
+ const bs=a=>{const s=nm(a,"sr"),v=nm(a,"avg"),b=nm(a,"bp");return x=>.4*s(x)+.3*v(x)+.3*b(x)},
+ ars=a=>{const r=nm(a,"runs"),w=nm(a,"wk");return x=>.5*r(x)+.5*w(x)},
+ bws=a=>{const w=nm(a,"wk"),e=nm(a,"eco");return x=>.6*w(x)+.4*(1-e(x))};
+ sel=new Set([...pick("Power Hitters",2,bs),...pick("Anchors",2,bs),...pick("Finishers",1,bs),...pick("All Rounders",2,ars),...pick("Specialist Fast Bowlers",4,bws)].map(x=>x.n));xi()}
+document.addEventListener("click",e=>{const r=e.target.closest("[data-r]"),th=e.target.closest("th"),tr=e.target.closest("tr.row"),c=e.target.closest(".chip");
+ if(r){role=r.dataset.r;sort={k:"n",d:1}}else if(th){sort=sort.k==th.dataset.k?{k:sort.k,d:-sort.d}:{k:th.dataset.k,d:1}}
+ else if(tr){sel.has(tr.dataset.n)?sel.delete(tr.dataset.n):sel.add(tr.dataset.n)}
+ else if(c){stg[c.dataset.s]^=1;c.classList.toggle("on");build()}else return;head()});
+$("#t1").onclick=()=>{$("#pa").hidden=0;$("#f11").hidden=1;$("#t1").className="on";$("#t2").className=""};
+$("#t2").onclick=()=>{$("#pa").hidden=1;$("#f11").hidden=0;$("#t2").className="on";$("#t1").className="";xi()};
+$("#auto").onclick=auto;$("#clr").onclick=()=>{sel.clear();xi();head()};
+$("#fi").onchange=async e=>{
+ const nb=x=>parseFloat(x)||0;let got=[];
+ for(const f of e.target.files){const n=f.name.toLowerCase(),d=csv(await f.text());
+  if(n.includes("batting")){S.bat=d.map(r=>({id:g(r,"matchid","match"),n:g(r,"batsmanname","batsman","playername","name"),t:g(r,"teaminnings","team","battingteam"),runs:nb(g(r,"runs")),b:nb(g(r,"balls","ballsfaced","b")),f4:nb(g(r,"4s","fours")),s6:nb(g(r,"6s","sixes")),pos:nb(g(r,"battingpos","position","battingposition"))||5,out:/not|dnb|^$/i.test(g(r,"outnotout","dismissal","out","status"))?0:1})).filter(r=>r.n&&r.b>0);got.push("batting")}
+  else if(n.includes("bowling")){S.bowl=d.map(r=>({id:g(r,"matchid","match"),n:g(r,"bowlername","bowler","playername","name"),t:g(r,"teaminnings","team","bowlingteam"),ov:ov(g(r,"overs","o")),rc:nb(g(r,"runs","runsconceded")),wk:nb(g(r,"wickets","w"))})).filter(r=>r.n&&r.ov>0);got.push("bowling")}
+  else if(n.includes("player")){d.forEach(r=>S.pl[g(r,"playername","name")]=r);got.push("players")}
+  else if(n.includes("match")){d.forEach(r=>S.mt[g(r,"matchid","match")]=r);got.push("matches")}}
+ S.sample=!S.bat.length&&!S.bowl.length;build();$("#st").textContent=`Loaded: ${got.join(", ")||"nothing recognised (file names must contain batting / bowling / players / match)"}. ${S.bat.length} batting rows, ${S.bowl.length} bowling rows.`;head()};
+build();head();
+</script></body></html>

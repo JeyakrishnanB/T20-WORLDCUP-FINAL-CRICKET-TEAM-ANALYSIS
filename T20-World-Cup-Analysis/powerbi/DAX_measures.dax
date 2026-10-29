@@ -1,0 +1,22 @@
+-- Measures
+Total Runs = SUM(fact_batting_summary[runs])
+Balls Faced = SUM(fact_batting_summary[balls])
+Innings Batted = COUNTROWS(fact_batting_summary)
+Dismissals = CALCULATE(COUNTROWS(fact_batting_summary), fact_batting_summary[out/not_out] = "out")
+Strike Rate = DIVIDE([Total Runs], [Balls Faced]) * 100
+Batting Avg = DIVIDE([Total Runs], [Dismissals], [Total Runs])
+Boundary % = DIVIDE(SUM(fact_batting_summary[fours]) * 4 + SUM(fact_batting_summary[sixes]) * 6, [Total Runs])
+Avg Balls Faced = DIVIDE([Balls Faced], [Innings Batted])
+Batting Position = ROUND(AVERAGE(fact_batting_summary[battingPos]), 0)
+Total Wickets = SUM(fact_bowling_summary[wickets])
+Economy = DIVIDE(SUM(fact_bowling_summary[runs]), SUM(fact_bowling_summary[overs]))
+Bowling Avg = DIVIDE(SUM(fact_bowling_summary[runs]), [Total Wickets])
+
+-- Calculated column on dim_players / a role table (tune thresholds)
+Batting Role =
+VAR pos = [Batting Position]  VAR sr = [Strike Rate]  VAR av = [Batting Avg]
+RETURN SWITCH(TRUE(),
+  pos <= 3 && sr >= 140, "Power Hitter",
+  pos >= 3 && pos <= 5 && av >= 35 && sr < 130, "Anchor",
+  pos >= 5 && sr >= 140, "Finisher",
+  "Other")
